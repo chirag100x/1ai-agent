@@ -8,6 +8,12 @@ import appsRouter from "./routes/apps";
 import executionRouter from "./routes/execution";
 
 const app = express();
+// Mock user middleware: all requests get a test user
+app.use((req, res, next) => {
+  req.user = { id: "test-user", email: "test@example.com" };
+  next();
+});
+
 app.use(cors())
 app.use(express.json());
 

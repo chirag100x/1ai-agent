@@ -18,11 +18,6 @@ export interface ChatStreamResponse {
 }
 
 export class ChatService {
-  private static getAuthToken(): string | null {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("token");
-  }
-
   /**
    * Send a chat message and receive streaming response
    * @param request Chat request with message, model, and optional conversationId
@@ -38,36 +33,22 @@ export class ChatService {
     onError?: (error: string) => void,
     signal?: AbortSignal
   ): Promise<void> {
-    const token = this.getAuthToken();
-    
-    if (!token) {
-      onError?.("Authentication token not found. Please login again.");
-      return;
-    }
-
     try {
-      const response = await fetch(`${BACKEND_URL}/chat`, {
+      const response = await fetch(`${BACKEND_URL}/ai`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify(request),
-        signal
+        body: JSON.stringify({ prompt: request.message, model: request.model }),
+        signal,
       });
 
       if (!response.ok) {
         let errorMessage = `HTTP ${response.status}`;
-        
-        // Try to parse error response
         try {
           const errorData = await response.json();
           errorMessage = errorData.message || errorMessage;
-        } catch {
-          // If JSON parsing fails, use status text
-          errorMessage = response.statusText || errorMessage;
-        }
-        
+        } catch {}
         onError?.(errorMessage);
         return;
       }
@@ -77,49 +58,41 @@ export class ChatService {
         return;
       }
 
-      // Create a reader for the stream
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
       try {
         while (true) {
           const { done, value } = await reader.read();
-          
           if (done) {
             onDone?.();
             break;
           }
 
-          // Decode the chunk
           const chunk = decoder.decode(value, { stream: true });
-          
-          // Parse Server-Sent Events
-          const lines = chunk.split('\n');
-          
+          const lines = chunk.split("\n");
+
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6); // Remove 'data: ' prefix
-              
-              if (data.trim() === '') continue;
-              
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6).trim();
+              if (!data) continue;
+
               try {
                 const parsed: ChatStreamResponse = JSON.parse(data);
-                
+
                 if (parsed.error) {
                   onError?.(parsed.error);
                   return;
                 }
-                
                 if (parsed.done) {
                   onDone?.();
                   return;
                 }
-                
                 if (parsed.content) {
                   onChunk(parsed.content);
                 }
-              } catch (parseError) {
-                console.warn("Failed to parse SSE data:", data, parseError);
+              } catch (e) {
+                console.warn("Failed to parse SSE data:", data, e);
               }
             }
           }
@@ -128,105 +101,34 @@ export class ChatService {
         reader.releaseLock();
       }
     } catch (error) {
-      if (signal?.aborted) {
-        // Request was cancelled
-        return;
-      }
-      
-      if (error instanceof Error) {
-        onError?.(error.message);
-      } else {
-        onError?.("An unknown error occurred");
-      }
+      if (signal?.aborted) return;
+      onError?.(error instanceof Error ? error.message : "Unknown error");
     }
   }
 
   /**
-   * Fetch user credits
+   * Simple function to fetch AI response (non-streaming)
    */
-  static async getUserCredits(): Promise<{ credits: number; isPremium: boolean } | null> {
-    const token = this.getAuthToken();
-    
-    if (!token) {
-      throw new Error("Authentication token not found. Please login again.");
-    }
-
+  static async sendMessage(request: ChatRequest): Promise<string | null> {
     try {
-      const response = await fetch(`${BACKEND_URL}/credits`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
+      const res = await fetch(`${BACKEND_URL}/ai`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: request.message, model: request.model }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (!res.ok) {
+        const err = await res.json();
+        console.error("AI Error:", err.message || res.statusText);
+        return null;
       }
 
-      return await response.json();
+      const data = await res.json();
+      return data.response || null;
     } catch (error) {
-      console.error("Error fetching user credits:", error);
-      return null;
-    }
-  }
-
-  /**
-   * Fetch conversations list
-   */
-  static async getConversations(): Promise<any[] | null> {
-    const token = this.getAuthToken();
-    
-    if (!token) {
-      throw new Error("Authentication token not found. Please login again.");
-    }
-
-    try {
-      const response = await fetch(`${BACKEND_URL}/conversations`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data.conversations;
-    } catch (error) {
-      console.error("Error fetching conversations:", error);
-      return null;
-    }
-  }
-
-  /**
-   * Fetch a specific conversation with messages
-   */
-  static async getConversation(conversationId: string): Promise<any | null> {
-    const token = this.getAuthToken();
-    
-    if (!token) {
-      throw new Error("Authentication token not found. Please login again.");
-    }
-
-    try {
-      const response = await fetch(`${BACKEND_URL}/conversations/${conversationId}`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data.conversation;
-    } catch (error) {
-      console.error("Error fetching conversation:", error);
+      console.error("AI request failed:", error);
       return null;
     }
   }
 }
+

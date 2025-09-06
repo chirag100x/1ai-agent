@@ -1,8 +1,14 @@
-"use client";
+async function sendToAI(query: string) {
+  const response = await fetch("https://your-backend.onrender.com/ai/endpoint", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      // token is optional now because backend uses mock auth
+    },
+    body: JSON.stringify({ prompt: query }),
+  });
 
-// Import your AI interface component
-import AiPage from "@/app/_components/AiPage"; // replace with your actual AI component path
-
-export default function LoginPage() {
-  return <AiPage />; // directly render AI interface
+  const data = await response.json();
+  return data;
 }
+

@@ -1,5 +1,7 @@
+"use client";
+
 import React from "react";
-import AIPage from "./components/AIPage";
+import AIPage from "../components/AIPage"; // fixed import
 
 const content = `
 Here’s some text before code.
@@ -22,3 +24,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+

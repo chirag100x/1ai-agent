@@ -1,18 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Email } from "@/app/_components/Email";
-import { Otp } from "@/app/_components/Otp";
+// Import your AI interface component
+import AiPage from "@/app/_components/AiPage"; // replace with your actual AI component path
 
-function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [step, setStep] = useState("email");
-  return (
-    <div className="flex h-screen w-screen items-center justify-center">
-      {step === "email" && <Email setEmail={setEmail} setStep={setStep} email={email} />}
-      {step === "otp" && <Otp email={email} />}
-    </div>
-  );
+export default function LoginPage() {
+  return <AiPage />; // directly render AI interface
 }
-
-export default LoginPage;
